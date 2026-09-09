@@ -19,3 +19,11 @@ No Bitquery token is required.
 ## Important limitation
 
 The free anonymous PumpDev feed allows 5 subscriptions. PumpFinder reserves one for new-token launches and uses up to 4 token-trade subscriptions. A free PumpDev account provides higher limits. This is a free monitoring version, not an exhaustive all-token market scanner.
+
+
+## V6 — momentum et rebonds
+- Corrige l'affichage `$?` en mémorisant les métadonnées reçues lors de la création du token.
+- Détecte les configurations de momentum haussier et de rebond après une correction.
+- Un token qui a déjà monté puis baissé peut passer en `REBOUND_WATCH` si un rebond est réellement observable.
+- Si les données sont insuffisantes, le moteur reste en `NO_SIGNAL`.
+- Aucun wallet, aucune clé privée et aucun achat/vente automatique.

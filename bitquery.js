@@ -213,10 +213,11 @@ function normalizeTrade(event) {
     ? new Date(event.timestamp).getTime()
     : Date.now();
 
+  const meta = this.metadata.get(event.mint) || {};
   return {
     mint: event.mint,
-    symbol: event.symbol || "?",
-    name: event.name || "",
+    symbol: event.symbol || meta.symbol || "?",
+    name: event.name || meta.name || "",
     time: Number.isFinite(time) ? time : Date.now(),
     signature: event.signature || event.tx || "",
     usd: Number.isFinite(usd) && usd > 0 ? usd : null,
