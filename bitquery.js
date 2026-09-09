@@ -9,6 +9,10 @@ export class PumpStream {
     this.stopped = false;
   }
 
+  start() {
+    this.connect();
+  }
+
   connect() {
     if (this.stopped) return;
 
@@ -39,87 +43,89 @@ export class PumpStream {
       try {
         const message = JSON.parse(raw.toString());
 
+        // Bitquery accepte la connexion
         if (message.type === "connection_ack") {
           console.log("✅ Bitquery authentifié");
 
-          this.ws.send(
-            JSON.stringify({
-              id: "1",
-              type: "start",
-              payload: {
-                query: `
-                  subscription PumpTrades {
-                    Solana {
-                      DEXTrades(
-                        where: {
-                          Trade: {
-                            Dex: {
-                              ProtocolName: {
-                                is: "pump"
-                              }
+          const subscription = {
+            id: "1",
+            type: "start",
+            payload: {
+              query: `
+                subscription PumpTrades {
+                  Solana {
+                    DEXTrades(
+                      where: {
+                        Trade: {
+                          Dex: {
+                            ProtocolName: {
+                              is: "pump"
                             }
                           }
                         }
-                      ) {
-                        Block {
-                          Time
+                      }
+                    ) {
+                      Block {
+                        Time
+                      }
+
+                      Transaction {
+                        Signature
+                      }
+
+                      Trade {
+                        Dex {
+                          ProtocolName
+                          ProtocolFamily
                         }
 
-                        Transaction {
-                          Signature
+                        Buy {
+                          Amount
+                          AmountInUSD
+                          Price
+
+                          Currency {
+                            MintAddress
+                            Symbol
+                            Name
+                          }
+
+                          Account {
+                            Address
+                            Owner
+                          }
                         }
 
-                        Trade {
-                          Dex {
-                            ProtocolName
-                            ProtocolFamily
+                        Sell {
+                          Amount
+                          AmountInUSD
+                          Price
+
+                          Currency {
+                            MintAddress
+                            Symbol
+                            Name
                           }
 
-                          Buy {
-                            Amount
-                            AmountInUSD
-                            Price
-
-                            Currency {
-                              MintAddress
-                              Symbol
-                              Name
-                            }
-
-                            Account {
-                              Address
-                              Owner
-                            }
-                          }
-
-                          Sell {
-                            Amount
-                            AmountInUSD
-                            Price
-
-                            Currency {
-                              MintAddress
-                              Symbol
-                              Name
-                            }
-
-                            Account {
-                              Address
-                              Owner
-                            }
+                          Account {
+                            Address
+                            Owner
                           }
                         }
                       }
                     }
                   }
-                `
-              }
-            })
-          );
+                }
+              `
+            }
+          };
+
+          this.ws.send(JSON.stringify(subscription));
 
           console.log("📡 Abonnement Pump.fun actif");
         }
 
+        // Données reçues
         if (message.type === "data") {
           const trades =
             message?.payload?.data?.Solana?.DEXTrades || [];
@@ -129,11 +135,17 @@ export class PumpStream {
           }
         }
 
+        // Erreur Bitquery
         if (message.type === "error") {
           console.error(
             "❌ Erreur Bitquery:",
             JSON.stringify(message.payload)
           );
+        }
+
+        // Keep alive
+        if (message.type === "ka") {
+          return;
         }
       } catch (err) {
         console.error(
@@ -171,7 +183,9 @@ export class PumpStream {
       const currency =
         buy?.Currency || sell?.Currency;
 
-      if (!currency?.MintAddress) return;
+      if (!currency?.MintAddress) {
+        return;
+      }
 
       const amountUSD =
         Number(buy?.AmountInUSD || 0) ||
@@ -183,19 +197,36 @@ export class PumpStream {
 
       const event = {
         mint: currency.MintAddress,
-        symbol: currency.Symbol || "UNKNOWN",
-        name: currency.Name || "",
+
+        symbol:
+          currency.Symbol ||
+          "UNKNOWN",
+
+        name:
+          currency.Name ||
+          "",
+
         amountUSD,
+
         price,
+
         timestamp:
           trade?.Block?.Time ||
           new Date().toISOString(),
+
         signature:
-          trade?.Transaction?.Signature || "",
-        side: buy ? "BUY" : "SELL"
+          trade?.Transaction?.Signature ||
+          "",
+
+        side:
+          buy
+            ? "BUY"
+            : "SELL"
       };
 
-      this.onTrade(event);
+      if (typeof this.onTrade === "function") {
+        this.onTrade(event);
+      }
     } catch (err) {
       console.error(
         "❌ Erreur normalisation trade:",
