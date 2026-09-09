@@ -1,129 +1,389 @@
 import WebSocket from "ws";
 
 const PUMP = "pump";
-const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 
 const QUERY = `
 subscription PumpTrades {
   Solana {
     DEXTrades(
       where: {
-        Trade: { Dex: { ProtocolName: { is: "${PUMP}" } } }
-        Transaction: { Result: { Success: true } }
+        Trade: {
+          Dex: {
+            ProtocolName: { is: "${PUMP}" }
+          }
+        }
+        Transaction: {
+          Result: { Success: true }
+        }
       }
     ) {
-      Block { Time }
-      Transaction { Signature }
+      Block {
+        Time
+      }
+      Transaction {
+        Signature
+      }
       Trade {
-        Dex { ProtocolName ProtocolFamily }
+        Dex {
+          ProtocolName
+          ProtocolFamily
+        }
         Buy {
           Amount
           AmountInUSD
           Price
-          Currency { MintAddress Symbol Name }
-          Account { Address Owner }
+          Currency {
+            MintAddress
+            Symbol
+            Name
+          }
+          Account {
+            Address
+            Owner
+          }
         }
         Sell {
           Amount
           AmountInUSD
           Price
-          Currency { MintAddress Symbol Name }
-          Account { Address Owner }
+          Currency {
+            MintAddress
+            Symbol
+            Name
+          }
+          Account {
+            Address
+            Owner
+          }
         }
       }
     }
   }
-}`;
+}
+`;
 
 export class PumpStream {
-  constructor({token,wsUrl,onTrade}) {
-    this.token=token; this.wsUrl=wsUrl; this.onTrade=onTrade;
-    this.ws=null; this.connected=false; this.messages=0; this.lastTrade=null;
+  constructor({ token, wsUrl, onTrade }) {
+    this.token = token;
+    this.wsUrl = wsUrl || "wss://streaming.bitquery.io/graphql";
+    this.onTrade = onTrade;
+
+    this.ws = null;
+    this.connected = false;
+    this.messages = 0;
+    this.lastTrade = null;
+    this.reconnectTimer = null;
   }
 
-  start(){ if(!this.token) return; this.connect(); }
+  start() {
+    if (!this.token) {
+      console.error("❌ BITQUERY_TOKEN manquant.");
+      return;
+    }
 
-  connect(){
-    const url = `${this.wsUrl}?token=${encodeURIComponent(this.token)}`;
-    this.ws = new WebSocket(url, ["graphql-transport-ws","graphql-ws"]);
+    this.connect();
+  }
 
-    this.ws.on("open",()=>{
-      this.connected=true;
-      // graphql-transport-ws
-      this.ws.send(JSON.stringify({type:"connection_init",payload:{}}));
+  connect() {
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch {}
+    }
+
+    console.log("🔌 Connexion Bitquery...");
+
+    /*
+     * Bitquery V2 accepte le token OAuth Bearer.
+     * On utilise ici le header Authorization directement.
+     */
+    this.ws = new WebSocket(
+      this.wsUrl,
+      ["graphql-transport-ws"],
+      {
+        headers: {
+          Authorization: `Bearer ${this.token}`
+        }
+      }
+    );
+
+    this.ws.on("open", () => {
+      console.log("✅ WebSocket Bitquery connecté");
+      this.connected = true;
+
+      this.ws.send(
+        JSON.stringify({
+          type: "connection_init",
+          payload: {}
+        })
+      );
     });
 
-    this.ws.on("message",raw=>{
-      try{
-        const m=JSON.parse(raw.toString());
-        if(m.type==="connection_ack" || m.type==="ka") {
+    this.ws.on("message", raw => {
+      try {
+        const message = JSON.parse(raw.toString());
+
+        /*
+         * Bitquery confirme la connexion.
+         */
+        if (message.type === "connection_ack") {
+          console.log("✅ Bitquery authentifié");
           this.subscribe();
           return;
         }
-        if(m.type==="next" && m.payload?.data) {
-          this.messages++;
-          const rows=m.payload.data?.Solana?.DEXTrades||[];
-          for(const row of rows) {
-            const t=normalize(row);
-            if(t) {
-              this.lastTrade=new Date().toISOString();
-              this.onTrade(t);
-            }
-          }
+
+        /*
+         * Keep-alive.
+         */
+        if (
+          message.type === "ping" ||
+          message.type === "ka"
+        ) {
+          try {
+            this.ws.send(JSON.stringify({ type: "pong" }));
+          } catch {}
+          return;
         }
-        // graphql-ws older message type
-        if(m.type==="data" && m.payload?.data) {
-          this.messages++;
-          const rows=m.payload.data?.Solana?.DEXTrades||[];
-          for(const row of rows) {
-            const t=normalize(row);
-            if(t) { this.lastTrade=new Date().toISOString(); this.onTrade(t); }
-          }
+
+        /*
+         * Erreur GraphQL.
+         */
+        if (message.type === "error") {
+          console.error(
+            "❌ Bitquery GraphQL:",
+            JSON.stringify(message.payload)
+          );
+          return;
         }
-      }catch(e){console.error("Bitquery message:",e.message)}
+
+        /*
+         * Données.
+         */
+        if (
+          message.type === "next" &&
+          message.payload?.data
+        ) {
+          this.processData(message.payload.data);
+          return;
+        }
+
+        /*
+         * Compatibilité graphql-ws.
+         */
+        if (
+          message.type === "data" &&
+          message.payload?.data
+        ) {
+          this.processData(message.payload.data);
+          return;
+        }
+
+      } catch (error) {
+        console.error(
+          "❌ Erreur message Bitquery:",
+          error.message
+        );
+      }
     });
 
-    this.ws.on("close",()=>{this.connected=false;setTimeout(()=>this.connect(),3000)});
-    this.ws.on("error",e=>console.error("Bitquery WS:",e.message));
+    this.ws.on("close", (code, reason) => {
+      this.connected = false;
+
+      console.error(
+        `🔴 Bitquery déconnecté (${code}) ${reason || ""}`
+      );
+
+      this.scheduleReconnect();
+    });
+
+    this.ws.on("error", error => {
+      console.error(
+        "❌ Bitquery WebSocket:",
+        error.message
+      );
+    });
   }
 
-  subscribe(){
-    const payload={query:QUERY};
-    // graphql-transport-ws
-    this.ws.send(JSON.stringify({id:"pump-trades",type:"subscribe",payload}));
+  subscribe() {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    console.log("📡 Abonnement aux trades Pump.fun...");
+
+    this.ws.send(
+      JSON.stringify({
+        id: "pump-trades",
+        type: "subscribe",
+        payload: {
+          query: QUERY
+        }
+      })
+    );
   }
 
-  status(){
-    return {connected:this.connected,messages:this.messages,lastTrade:this.lastTrade,pumpProgram:PUMP_PROGRAM};
+  processData(data) {
+    const rows =
+      data?.Solana?.DEXTrades || [];
+
+    for (const row of rows) {
+      const trade = normalizeTrade(row);
+
+      if (!trade) {
+        continue;
+      }
+
+      this.messages++;
+      this.lastTrade = new Date().toISOString();
+
+      try {
+        this.onTrade(trade);
+      } catch (error) {
+        console.error(
+          "❌ Erreur traitement trade:",
+          error.message
+        );
+      }
+    }
+  }
+
+  scheduleReconnect() {
+    if (this.reconnectTimer) {
+      return;
+    }
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+
+      console.log("🔄 Reconnexion Bitquery...");
+      this.connect();
+    }, 5000);
+  }
+
+  status() {
+    return {
+      connected: this.connected,
+      messages: this.messages,
+      lastTrade: this.lastTrade,
+      endpoint: this.wsUrl
+    };
   }
 }
 
-function normalize(row){
-  const tr=row.Trade;
-  const buy=tr?.Buy;
-  const sell=tr?.Sell;
-  // On Pump.fun, the traded token is the non-SOL currency. Use the side
-  // that carries a non-native mint. Never guess a mint from a missing field.
-  const candidate = buy?.Currency?.MintAddress && !isNative(buy.Currency.MintAddress)
-    ? buy : sell?.Currency?.MintAddress && !isNative(sell.Currency.MintAddress) ? sell : null;
-  if(!candidate?.Currency?.MintAddress) return null;
+function normalizeTrade(row) {
+  const trade = row?.Trade;
 
-  const usd=Number(buy?.AmountInUSD ?? sell?.AmountInUSD ?? 0);
-  const price=Number(buy?.Price ?? sell?.Price ?? 0);
-  if(!Number.isFinite(usd) || usd<=0 || !Number.isFinite(price) || price<=0) return null;
+  if (!trade) {
+    return null;
+  }
 
-  const side = buy?.Currency?.MintAddress === candidate.Currency.MintAddress ? "BUY" : "SELL";
+  const buy = trade.Buy;
+  const sell = trade.Sell;
+
+  /*
+   * On cherche le token réellement échangé.
+   */
+  const buyMint =
+    buy?.Currency?.MintAddress || null;
+
+  const sellMint =
+    sell?.Currency?.MintAddress || null;
+
+  const buyIsToken =
+    buyMint && !isNative(buyMint);
+
+  const sellIsToken =
+    sellMint && !isNative(sellMint);
+
+  let tokenSide;
+
+  if (buyIsToken) {
+    tokenSide = buy;
+  } else if (sellIsToken) {
+    tokenSide = sell;
+  } else {
+    return null;
+  }
+
+  const mint =
+    tokenSide?.Currency?.MintAddress;
+
+  if (!mint) {
+    return null;
+  }
+
+  const price = Number(
+    tokenSide?.Price || 0
+  );
+
+  const usd = Number(
+    tokenSide?.AmountInUSD ||
+    buy?.AmountInUSD ||
+    sell?.AmountInUSD ||
+    0
+  );
+
+  if (
+    !Number.isFinite(price) ||
+    price <= 0 ||
+    !Number.isFinite(usd) ||
+    usd <= 0
+  ) {
+    return null;
+  }
+
+  /*
+   * Si le token apparaît côté Buy,
+   * on considère l'opération comme un achat
+   * du token.
+   */
+  const side =
+    buyIsToken
+      ? "BUY"
+      : "SELL";
+
+  const trader =
+    buy?.Account?.Owner ||
+    buy?.Account?.Address ||
+    sell?.Account?.Owner ||
+    sell?.Account?.Address ||
+    null;
+
   return {
-    mint:candidate.Currency.MintAddress,
-    symbol:candidate.Currency.Symbol || "?",
-    name:candidate.Currency.Name || "",
-    time:new Date(row.Block.Time).getTime(),
-    signature:row.Transaction.Signature,
-    usd, price, side,
-    trader:(buy?.Account?.Owner || buy?.Account?.Address || sell?.Account?.Owner || sell?.Account?.Address || null)
+    mint,
+
+    symbol:
+      tokenSide?.Currency?.Symbol ||
+      "UNKNOWN",
+
+    name:
+      tokenSide?.Currency?.Name ||
+      "",
+
+    time:
+      row?.Block?.Time
+        ? new Date(row.Block.Time).getTime()
+        : Date.now(),
+
+    signature:
+      row?.Transaction?.Signature ||
+      null,
+
+    usd,
+    price,
+    side,
+    trader,
+
+    source: "bitquery_v2_pumpfun"
   };
 }
 
-function isNative(mint){
-  return !mint || mint==="So11111111111111111111111111111111111111112" || mint==="11111111111111111111111111111111";
+function isNative(mint) {
+  return (
+    !mint ||
+    mint ===
+      "So11111111111111111111111111111111111111112" ||
+    mint ===
+      "11111111111111111111111111111111"
+  );
 }
