@@ -1,6 +1,6 @@
-const WebSocket = require("ws");
+import WebSocket from "ws";
 
-class PumpStream {
+export class PumpStream {
   constructor({ token, onTrade }) {
     this.token = token;
     this.onTrade = onTrade;
@@ -42,76 +42,80 @@ class PumpStream {
         if (message.type === "connection_ack") {
           console.log("✅ Bitquery authentifié");
 
-          const subscription = {
-            id: "1",
-            type: "start",
-            payload: {
-              query: `
-                subscription PumpTrades {
-                  Solana {
-                    DEXTrades(
-                      where: {
-                        Trade: {
-                          Dex: {
-                            ProtocolName: {
-                              is: "pump"
+          this.ws.send(
+            JSON.stringify({
+              id: "1",
+              type: "start",
+              payload: {
+                query: `
+                  subscription PumpTrades {
+                    Solana {
+                      DEXTrades(
+                        where: {
+                          Trade: {
+                            Dex: {
+                              ProtocolName: {
+                                is: "pump"
+                              }
                             }
                           }
                         }
-                      }
-                    ) {
-                      Block {
-                        Time
-                      }
-
-                      Transaction {
-                        Signature
-                      }
-
-                      Trade {
-                        Dex {
-                          ProtocolName
-                          ProtocolFamily
+                      ) {
+                        Block {
+                          Time
                         }
 
-                        Buy {
-                          Amount
-                          AmountInUSD
-                          Price
-                          Currency {
-                            MintAddress
-                            Symbol
-                            Name
-                          }
-                          Account {
-                            Address
-                            Owner
-                          }
+                        Transaction {
+                          Signature
                         }
 
-                        Sell {
-                          Amount
-                          AmountInUSD
-                          Price
-                          Currency {
-                            MintAddress
-                            Symbol
-                            Name
+                        Trade {
+                          Dex {
+                            ProtocolName
+                            ProtocolFamily
                           }
-                          Account {
-                            Address
-                            Owner
+
+                          Buy {
+                            Amount
+                            AmountInUSD
+                            Price
+
+                            Currency {
+                              MintAddress
+                              Symbol
+                              Name
+                            }
+
+                            Account {
+                              Address
+                              Owner
+                            }
+                          }
+
+                          Sell {
+                            Amount
+                            AmountInUSD
+                            Price
+
+                            Currency {
+                              MintAddress
+                              Symbol
+                              Name
+                            }
+
+                            Account {
+                              Address
+                              Owner
+                            }
                           }
                         }
                       }
                     }
                   }
-                }
-              `
-            }
-          };
-
-          this.ws.send(JSON.stringify(subscription));
+                `
+              }
+            })
+          );
 
           console.log("📡 Abonnement Pump.fun actif");
         }
@@ -127,21 +131,23 @@ class PumpStream {
 
         if (message.type === "error") {
           console.error(
-            "❌ Erreur abonnement Bitquery:",
+            "❌ Erreur Bitquery:",
             JSON.stringify(message.payload)
           );
         }
-
-        if (message.type === "ka") {
-          // Keep alive
-        }
       } catch (err) {
-        console.error("❌ Erreur traitement Bitquery:", err.message);
+        console.error(
+          "❌ Erreur traitement Bitquery:",
+          err.message
+        );
       }
     });
 
     this.ws.on("error", (err) => {
-      console.error("❌ Bitquery WebSocket:", err.message);
+      console.error(
+        "❌ Bitquery WebSocket:",
+        err.message
+      );
     });
 
     this.ws.on("close", (code) => {
@@ -162,7 +168,8 @@ class PumpStream {
       const buy = trade?.Trade?.Buy;
       const sell = trade?.Trade?.Sell;
 
-      const currency = buy?.Currency || sell?.Currency;
+      const currency =
+        buy?.Currency || sell?.Currency;
 
       if (!currency?.MintAddress) return;
 
@@ -180,14 +187,20 @@ class PumpStream {
         name: currency.Name || "",
         amountUSD,
         price,
-        timestamp: trade?.Block?.Time || new Date().toISOString(),
-        signature: trade?.Transaction?.Signature || "",
+        timestamp:
+          trade?.Block?.Time ||
+          new Date().toISOString(),
+        signature:
+          trade?.Transaction?.Signature || "",
         side: buy ? "BUY" : "SELL"
       };
 
       this.onTrade(event);
     } catch (err) {
-      console.error("❌ Erreur normalisation trade:", err.message);
+      console.error(
+        "❌ Erreur normalisation trade:",
+        err.message
+      );
     }
   }
 
@@ -199,5 +212,3 @@ class PumpStream {
     }
   }
 }
-
-module.exports = PumpStream;
