@@ -4,7 +4,8 @@ const WS_URL = "wss://pumpdev.io/ws";
 const MAX_TOKEN_SUBSCRIPTIONS = Number(process.env.MAX_TOKEN_SUBSCRIPTIONS || 4);
 
 export class PumpStream {
-  constructor({ onTrade }) {
+  constructor({
+    this.metadata = new Map(); onTrade }) {
     this.onTrade = onTrade;
     this.ws = null;
     this.stopped = false;
@@ -62,7 +63,7 @@ export class PumpStream {
         }
 
         if (event.txType === "buy" || event.txType === "sell") {
-          const trade = normalizeTrade(event);
+          const trade = this.normalizeTrade(event);
           if (!trade) return;
 
           this.totalTrades++;
@@ -178,52 +179,25 @@ export class PumpStream {
   }
 }
 
-function normalizeTrade(event) {
-  if (!event?.mint) return null;
-
-  const usd = Number(
-    event.usdAmount ??
-    event.amountUsd ??
-    event.tradeUsd ??
-    0
-  );
-
-  const solAmount = Number(
-    event.solAmount ??
-    event.quoteAmount ??
-    0
-  );
-
-  const amount = Number(
-    event.tokenAmount ??
-    event.amount ??
-    0
-  );
-
-  const price = Number(
-    event.price ??
-    (amount > 0 && solAmount > 0 ? solAmount / amount : 0)
-  );
-
-  // PumpDev documents quoteAmount/solAmount for live trade events.
-  // We keep the native quote amount instead of inventing a USD conversion.
-  if (!Number.isFinite(solAmount) || solAmount <= 0) return null;
-
-  const time = event.timestamp
-    ? new Date(event.timestamp).getTime()
-    : Date.now();
-
-  const meta = this.metadata.get(event.mint) || {};
-  return {
-    mint: event.mint,
-    symbol: event.symbol || meta.symbol || "?",
-    name: event.name || meta.name || "",
-    time: Number.isFinite(time) ? time : Date.now(),
-    signature: event.signature || event.tx || "",
-    usd: Number.isFinite(usd) && usd > 0 ? usd : null,
-    quoteSOL: solAmount,
-    price: Number.isFinite(price) && price > 0 ? price : 0,
-    side: event.txType === "buy" ? "BUY" : "SELL",
-    trader: event.traderPublicKey || event.user || event.owner || null
-  };
-}
+normalizeTrade(event) {
+    if (!event?.mint) return null;
+    const meta = this.metadata?.get(event.mint) || {};
+    const usd = Number(event.usdAmount ?? event.amountUsd ?? event.tradeUsd ?? 0);
+    const solAmount = Number(event.solAmount ?? event.quoteAmount ?? 0);
+    const amount = Number(event.tokenAmount ?? event.amount ?? 0);
+    const price = Number(event.price ?? (amount > 0 && solAmount > 0 ? solAmount / amount : 0));
+    if (!Number.isFinite(solAmount) || solAmount <= 0) return null;
+    const time = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
+    return {
+      mint: event.mint,
+      symbol: event.symbol || meta.symbol || "?",
+      name: event.name || meta.name || "",
+      time: Number.isFinite(time) ? time : Date.now(),
+      signature: event.signature || event.tx || "",
+      usd: Number.isFinite(usd) && usd > 0 ? usd : null,
+      quoteSOL: solAmount,
+      price: Number.isFinite(price) && price > 0 ? price : 0,
+      side: event.txType === "buy" ? "BUY" : "SELL",
+      trader: event.traderPublicKey || event.user || event.owner || null
+    };
+  }
