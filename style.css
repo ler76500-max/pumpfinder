@@ -1,1 +1,104 @@
-body{margin:0;background:#090b0f;color:#f3f4f6;font-family:system-ui,-apple-system,sans-serif}main{max-width:1150px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;align-items:center;gap:15px}h1{margin:0 0 6px}.notice{padding:14px 16px;margin:18px 0;border:1px solid #343942;border-radius:14px;display:flex;gap:10px;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:15px}.card{background:#12151a;border:1px solid #292e36;border-radius:16px;padding:18px}.score{font-size:34px;font-weight:900}.green{color:#70e59b}.yellow{color:#ffd166}.muted{color:#9aa2ad}pre{background:#12151a;border-radius:14px;padding:16px;overflow:auto}.metric{display:flex;justify-content:space-between;margin:6px 0}
+body {
+  margin: 0;
+  background: #090b0f;
+  color: #f3f4f6;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+main {
+  max-width: 1150px;
+  margin: auto;
+  padding: 24px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+
+h1 { margin: 0 0 6px; }
+h2 { margin-top: 0; }
+
+.notice {
+  padding: 14px 16px;
+  margin: 18px 0;
+  border: 1px solid #343942;
+  border-radius: 14px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.stat {
+  background: #12151a;
+  border: 1px solid #292e36;
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.stat span {
+  display: block;
+  color: #9aa2ad;
+  margin-bottom: 6px;
+}
+
+.stat b {
+  font-size: 22px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 15px;
+}
+
+.card {
+  background: #12151a;
+  border: 1px solid #292e36;
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.score {
+  font-size: 34px;
+  font-weight: 900;
+}
+
+.green { color: #70e59b; }
+.yellow { color: #ffd166; }
+.muted { color: #9aa2ad; }
+
+pre {
+  background: #12151a;
+  border-radius: 14px;
+  padding: 16px;
+  overflow: auto;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  margin: 7px 0;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid #292e36;
+  margin: 14px 0;
+}
+
+small {
+  display: block;
+  margin-top: 14px;
+  color: #6f7782;
+  word-break: break-all;
+}

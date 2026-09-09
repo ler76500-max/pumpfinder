@@ -1,8 +1,48 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PumpFinder V3</title><link rel="stylesheet" href="/style.css"></head>
-<body><main>
-<header><div><h1>🚀 PumpFinder V3</h1><p>Détection Pump.fun en temps réel — décision manuelle</p></div><div id="live">...</div></header>
-<div class="notice"><b>🛡️ AUCUN TRADING</b><span>Le logiciel ne possède ni wallet ni clé privée.</span></div>
-<div class="notice"><b>⚠️ Important</b><span>Les scénarios affichés ne sont pas des probabilités garanties. Le modèle doit être calibré sur l'historique avant d'être considéré comme prédictif.</span></div>
-<section><h2>Top opportunités</h2><div id="cards" class="grid"></div></section>
-<section><h2>État</h2><pre id="status"></pre></section>
-</main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PumpFinder V4</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>🚀 PumpFinder V4</h1>
+      <p>Détection Pump.fun en temps réel — décision manuelle</p>
+    </div>
+    <div id="live">...</div>
+  </header>
+
+  <div class="notice">
+    <b>🛡️ AUCUN TRADING</b>
+    <span>Le logiciel ne possède ni wallet ni clé privée et ne passe aucun ordre.</span>
+  </div>
+
+  <div class="notice">
+    <b>⚠️ Pas de fausse probabilité</b>
+    <span>Sans assez de données, le système affiche NO SIGNAL. Les scores restent des scores de classement, pas des chances de gain.</span>
+  </div>
+
+  <section class="stats">
+    <div class="stat"><span>Tokens suivis</span><b id="tracked">0</b></div>
+    <div class="stat"><span>Tokens actifs 5m</span><b id="active">0</b></div>
+    <div class="stat"><span>Trades reçus</span><b id="trades">0</b></div>
+    <div class="stat"><span>Dernier trade</span><b id="lastTrade">—</b></div>
+  </section>
+
+  <section>
+    <h2>Top opportunités / surveillance</h2>
+    <div id="cards" class="grid"></div>
+  </section>
+
+  <section>
+    <h2>État technique</h2>
+    <pre id="status"></pre>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
