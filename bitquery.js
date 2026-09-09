@@ -4,41 +4,31 @@ const WS_URL = "wss://pumpdev.io/ws";
 const MAX_TOKEN_SUBSCRIPTIONS = Number(process.env.MAX_TOKEN_SUBSCRIPTIONS || 4);
 
 export class PumpStream {
-  constructor({
-    this.metadata = new Map(); onTrade }) {
+  constructor({ onTrade }) {
     this.onTrade = onTrade;
     this.ws = null;
-    this.stopped = false;
-    this.connected = false;
-    this.newTokenSubscribed = false;
-    this.tokenTradeSubscribed = false;
-    this.tracked = new Map();
-    this.totalTrades = 0;
-    this.totalCreates = 0;
-    this.lastTrade = null;
-    this.lastCreate = null;
-    this.lastError = null;
-    this.reconnectTimer = null;
+    this.tracked = new Set();
+    this.metadata = new Map();
+    this.stats = {
+      creates: 0,
+      trades: 0,
+      errors: 0,
+      connected: false
+    };
   }
 
   start() {
-    this.stopped = false;
     this.connect();
   }
 
   connect() {
-    if (this.stopped) return;
-
-    console.log("🔌 Connexion PumpDev...");
     this.ws = new WebSocket(WS_URL);
 
     this.ws.on("open", () => {
-      this.connected = true;
-      this.lastError = null;
+      this.stats.connected = true;
       console.log("🟢 PumpDev WebSocket connecté");
 
       this.send({ method: "subscribeNewToken" });
-      this.newTokenSubscribed = true;
       console.log("📡 Abonnement nouveaux tokens actif");
 
       this.subscribeTrackedTokens();
@@ -47,147 +37,118 @@ export class PumpStream {
     this.ws.on("message", raw => {
       try {
         const event = JSON.parse(raw.toString());
-
-        if (event.txType === "create") {
-          this.totalCreates++;
-          this.lastCreate = new Date().toISOString();
-
-          if (event.mint) {
-            this.trackToken(event);
-          }
-
-          console.log(
-            `🆕 Nouveau token $${event.symbol || "?"} ${event.mint || ""}`
-          );
-          return;
-        }
-
-        if (event.txType === "buy" || event.txType === "sell") {
-          const trade = this.normalizeTrade(event);
-          if (!trade) return;
-
-          this.totalTrades++;
-          this.lastTrade = new Date().toISOString();
-
-          const usdText =
-            Number.isFinite(trade.usd) && trade.usd > 0
-              ? `$${trade.usd.toFixed(2)}`
-              : `${trade.quoteSOL.toFixed(4)} SOL`;
-
-          console.log(
-            `💰 ${trade.side} $${trade.symbol} | ${usdText}`
-          );
-
-          if (typeof this.onTrade === "function") {
-            this.onTrade(trade);
-          }
-        }
+        this.handleEvent(event);
       } catch (err) {
-        this.lastError = err.message;
-        console.error("❌ Erreur PumpDev:", err.message);
+        this.stats.errors++;
+        console.error("❌ Erreur PumpDev message:", err.message);
       }
     });
 
     this.ws.on("error", err => {
-      this.lastError = err.message;
-      console.error("❌ PumpDev WebSocket:", err.message);
+      this.stats.errors++;
+      console.error("❌ Erreur PumpDev:", err.message);
     });
 
-    this.ws.on("close", code => {
-      this.connected = false;
-      this.newTokenSubscribed = false;
-      this.tokenTradeSubscribed = false;
-
-      console.log(`🔴 PumpDev déconnecté (${code})`);
-
-      if (!this.stopped) {
-        clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => this.connect(), 3000);
-      }
+    this.ws.on("close", () => {
+      this.stats.connected = false;
+      console.log("🔴 PumpDev WebSocket fermé — reconnexion...");
+      setTimeout(() => this.connect(), 3000);
     });
   }
 
-  trackToken(event) {
-    const mint = event.mint;
-    if (!mint) return;
+  send(payload) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(payload));
+    }
+  }
 
-    if (this.tracked.has(mint)) return;
+  handleEvent(event) {
+    if (!event || typeof event !== "object") return;
 
-    if (this.tracked.size >= MAX_TOKEN_SUBSCRIPTIONS) {
-      console.log(
-        `⚠️ Limite gratuite atteinte: ${MAX_TOKEN_SUBSCRIPTIONS} tokens suivis`
-      );
+    if (event.txType === "create" || event.type === "create") {
+      this.stats.creates++;
+
+      if (event.mint) {
+        this.metadata.set(event.mint, {
+          symbol: event.symbol || "?",
+          name: event.name || "",
+          createdAt: event.timestamp || new Date().toISOString(),
+          creator: event.creator || event.creatorPublicKey || null
+        });
+      }
+
+      this.trackToken(event);
+
+      const meta = this.metadata.get(event.mint);
+      console.log(`🆕 Nouveau token $${meta?.symbol || event.symbol || "?"} ${event.mint}`);
       return;
     }
 
-    this.tracked.set(mint, {
-      mint,
-      symbol: event.symbol || "?",
-      name: event.name || "",
-      createdAt: Date.now()
-    });
+    if (event.txType === "buy" || event.txType === "sell") {
+      const trade = this.normalizeTrade(event);
+      if (!trade) return;
 
-    // Each token trade subscription counts toward PumpDev's subscription limit.
+      this.stats.trades++;
+
+      const valueText =
+        Number.isFinite(trade.usd) && trade.usd > 0
+          ? `$${trade.usd.toFixed(2)}`
+          : `${trade.quoteSOL.toFixed(4)} SOL`;
+
+      console.log(`💰 ${trade.side} $${trade.symbol} | ${valueText}`);
+
+      if (typeof this.onTrade === "function") {
+        this.onTrade(trade);
+      }
+    }
+  }
+
+  trackToken(event) {
+    const mint = event?.mint;
+    if (!mint || this.tracked.has(mint)) return;
+
+    if (this.tracked.size >= MAX_TOKEN_SUBSCRIPTIONS) {
+      console.log(`⚠️ Limite gratuite atteinte: ${MAX_TOKEN_SUBSCRIPTIONS} tokens suivis`);
+      return;
+    }
+
+    this.tracked.add(mint);
+    console.log(`📡 Suivi trades: ${event.symbol || this.metadata.get(mint)?.symbol || "?"} (${this.tracked.size}/${MAX_TOKEN_SUBSCRIPTIONS})`);
     this.subscribeToken(mint);
   }
 
   subscribeTrackedTokens() {
-    for (const mint of this.tracked.keys()) {
+    for (const mint of this.tracked) {
       this.subscribeToken(mint);
     }
   }
 
   subscribeToken(mint) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-
     this.send({
       method: "subscribeTokenTrade",
       keys: [mint]
     });
-
-    this.tokenTradeSubscribed = true;
-    console.log(
-      `📡 Suivi trades: ${this.tracked.get(mint)?.symbol || "?"} (${this.tracked.size}/${MAX_TOKEN_SUBSCRIPTIONS})`
-    );
   }
 
-  send(payload) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify(payload));
-  }
-
-  status() {
-    return {
-      connected: this.connected,
-      subscribed: this.newTokenSubscribed,
-      tokenTradeSubscribed: this.tokenTradeSubscribed,
-      trackedTokens: this.tracked.size,
-      maxTrackedTokens: MAX_TOKEN_SUBSCRIPTIONS,
-      trades: this.totalTrades,
-      creates: this.totalCreates,
-      lastTrade: this.lastTrade,
-      lastCreate: this.lastCreate,
-      lastError: this.lastError,
-      dataSource: "PumpDev WebSocket (free)"
-    };
-  }
-
-  stop() {
-    this.stopped = true;
-    clearTimeout(this.reconnectTimer);
-    if (this.ws) this.ws.close();
-  }
-}
-
-normalizeTrade(event) {
+  normalizeTrade(event) {
     if (!event?.mint) return null;
-    const meta = this.metadata?.get(event.mint) || {};
+
+    const meta = this.metadata.get(event.mint) || {};
     const usd = Number(event.usdAmount ?? event.amountUsd ?? event.tradeUsd ?? 0);
     const solAmount = Number(event.solAmount ?? event.quoteAmount ?? 0);
     const amount = Number(event.tokenAmount ?? event.amount ?? 0);
-    const price = Number(event.price ?? (amount > 0 && solAmount > 0 ? solAmount / amount : 0));
+
+    const price = Number(
+      event.price ??
+      (amount > 0 && solAmount > 0 ? solAmount / amount : 0)
+    );
+
     if (!Number.isFinite(solAmount) || solAmount <= 0) return null;
-    const time = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
+
+    const time = event.timestamp
+      ? new Date(event.timestamp).getTime()
+      : Date.now();
+
     return {
       mint: event.mint,
       symbol: event.symbol || meta.symbol || "?",
@@ -201,3 +162,16 @@ normalizeTrade(event) {
       trader: event.traderPublicKey || event.user || event.owner || null
     };
   }
+
+  status() {
+    return {
+      connected: this.stats.connected,
+      creates: this.stats.creates,
+      trades: this.stats.trades,
+      errors: this.stats.errors,
+      trackedTokens: this.tracked.size,
+      maxTrackedTokens: MAX_TOKEN_SUBSCRIPTIONS,
+      metadataCached: this.metadata.size
+    };
+  }
+}
