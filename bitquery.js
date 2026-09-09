@@ -43,7 +43,7 @@ export class PumpStream {
       try {
         const message = JSON.parse(raw.toString());
 
-        // Bitquery accepte la connexion
+        // Authentification réussie
         if (message.type === "connection_ack") {
           console.log("✅ Bitquery authentifié");
 
@@ -125,20 +125,28 @@ export class PumpStream {
           console.log("📡 Abonnement Pump.fun actif");
         }
 
-        // Données reçues
+        // ==============================
+        // DONNÉES REÇUES DE BITQUERY
+        // ==============================
         if (message.type === "data") {
+          console.log("📥 DONNÉES BITQUERY REÇUES");
+
           const trades =
             message?.payload?.data?.Solana?.DEXTrades || [];
+
+          console.log(`📊 Trades reçus: ${trades.length}`);
 
           for (const trade of trades) {
             this.handleTrade(trade);
           }
         }
 
-        // Erreur Bitquery
+        // ==============================
+        // ERREUR BITQUERY
+        // ==============================
         if (message.type === "error") {
           console.error(
-            "❌ Erreur Bitquery:",
+            "❌ ERREUR BITQUERY:",
             JSON.stringify(message.payload)
           );
         }
@@ -149,7 +157,7 @@ export class PumpStream {
         }
       } catch (err) {
         console.error(
-          "❌ Erreur traitement Bitquery:",
+          "❌ Erreur traitement message Bitquery:",
           err.message
         );
       }
@@ -175,6 +183,9 @@ export class PumpStream {
     });
   }
 
+  // ==============================
+  // TRANSFORMATION DU TRADE
+  // ==============================
   handleTrade(trade) {
     try {
       const buy = trade?.Trade?.Buy;
@@ -184,6 +195,7 @@ export class PumpStream {
         buy?.Currency || sell?.Currency;
 
       if (!currency?.MintAddress) {
+        console.log("⚠️ Trade sans MintAddress");
         return;
       }
 
@@ -224,9 +236,16 @@ export class PumpStream {
             : "SELL"
       };
 
+      console.log(
+        `💰 ${event.side} ${event.symbol} | $${event.amountUSD}`
+      );
+
       if (typeof this.onTrade === "function") {
         this.onTrade(event);
+      } else {
+        console.error("❌ onTrade n'est pas une fonction");
       }
+
     } catch (err) {
       console.error(
         "❌ Erreur normalisation trade:",
