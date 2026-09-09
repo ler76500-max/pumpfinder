@@ -158,32 +158,59 @@ function classifyMomentum(trades) {
   if (!Array.isArray(trades) || trades.length < 8) {
     return { state: "INSUFFICIENT_DATA", note: "Pas assez de données" };
   }
-  const priced = trades.filter(t => Number.isFinite(t.price) && t.price > 0);
+
+  const priced = trades.filter(
+    t => Number.isFinite(t.price) && t.price > 0
+  );
+
   if (priced.length < 8) {
     return { state: "INSUFFICIENT_DATA", note: "Prix insuffisant" };
   }
 
   const recent = priced.slice(-8);
   const before = priced.slice(-16, -8);
-  const recentAvg = recent.reduce((s,t)=>s+t.price,0)/recent.length;
-  const beforeAvg = before.length ? before.reduce((s,t)=>s+t.price,0)/before.length : recentAvg;
+
+  const recentAvg =
+    recent.reduce((sum, t) => sum + t.price, 0) / recent.length;
+
+  const beforeAvg = before.length
+    ? before.reduce((sum, t) => sum + t.price, 0) / before.length
+    : recentAvg;
 
   let peak = 0;
-  for (const t of priced.slice(0, -8)) peak = Math.max(peak, t.price);
-  const current = recent[recent.length-1].price;
-  const pullback = peak > 0 ? (peak-current)/peak : 0;
-  const recovery = beforeAvg > 0 ? (current-beforeAvg)/beforeAvg : 0;
+  for (const t of priced.slice(0, -8)) {
+    peak = Math.max(peak, t.price);
+  }
+
+  const current = recent[recent.length - 1].price;
+  const pullback = peak > 0 ? (peak - current) / peak : 0;
+  const recovery = beforeAvg > 0 ? (current - beforeAvg) / beforeAvg : 0;
 
   if (pullback >= 0.08 && recovery >= 0.03) {
-    return { state: "REBOUND_WATCH", note: "Hausse précédente + correction + rebond observé" };
+    return {
+      state: "REBOUND_WATCH",
+      note: "Hausse précédente + correction + rebond observé"
+    };
   }
+
   if (recovery >= 0.03) {
-    return { state: "MOMENTUM_UP", note: "Momentum haussier observé" };
+    return {
+      state: "MOMENTUM_UP",
+      note: "Momentum haussier observé"
+    };
   }
+
   if (pullback >= 0.08) {
-    return { state: "PULLBACK", note: "Correction observée" };
+    return {
+      state: "PULLBACK",
+      note: "Correction observée"
+    };
   }
-  return { state: "NEUTRAL", note: "Pas de configuration claire" };
+
+  return {
+    state: "NEUTRAL",
+    note: "Pas de configuration claire"
+  };
 }
 
 function scenarioEstimate(ret5, accel, buyRatio) {
