@@ -65,7 +65,7 @@ app.get("/api/health", (_, res) => {
 const port = Number(process.env.PORT || 3000);
 
 app.listen(port, () => {
-  console.log(`PumpFinder V6.2: http://localhost:${port}`);
+  console.log(`PumpFinder FINAL: http://localhost:${port}`);
 
   stream.start();
 });

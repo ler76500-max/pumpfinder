@@ -1,6 +1,6 @@
 {
-  "name": "pumpfinder-v6",
-  "version": "6.3.0",
+  "name": "pumpfinder-final",
+  "version": "7.0.0",
   "private": true,
   "type": "module",
   "scripts": {
