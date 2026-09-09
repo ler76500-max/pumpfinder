@@ -88,7 +88,7 @@ function renderCard(x) {
 
       <div class="metric">
         <span>Volume 5m</span>
-        <b>$${x.metrics.volume5mUSD}</b>
+        <b>${x.metrics.volume5mSOL ?? 0} SOL</b>
       </div>
 
       <div class="metric">
@@ -108,11 +108,11 @@ function renderCard(x) {
 
       <div class="metric">
         <span>Momentum 5m</span>
-        <b>${x.metrics.priceChange5mPct}%</b>
+        <b>${x.metrics.priceChange5mPct == null ? "—" : x.metrics.priceChange5mPct + "%"}</b>
       </div>
 
       <div class="metric">
-        <span>Accélération</span>
+        <span>Accélération volume</span>
         <b>${x.metrics.volumeAcceleration ?? "—"}x</b>
       </div>
 

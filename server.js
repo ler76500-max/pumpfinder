@@ -21,9 +21,7 @@ const engine = new Engine({
 const telegram = new Telegram();
 
 const stream = new PumpStream({
-  token: process.env.BITQUERY_TOKEN,
-  wsUrl: process.env.BITQUERY_WS || "wss://streaming.bitquery.io/graphql",
-  onTrade: trade => {
+    onTrade: trade => {
     engine.ingest(trade);
 
     const signal = engine.bestSignal();
@@ -41,7 +39,7 @@ app.get("/api/status", (_, res) => {
     stream: stream.status(),
     engine: engine.status(),
     candidates: engine.candidates().length,
-    tokenConfigured: Boolean(process.env.BITQUERY_TOKEN),
+    dataSource: "PumpDev WebSocket (free)",
     timestamp: new Date().toISOString()
   });
 });
@@ -59,7 +57,7 @@ app.get("/api/health", (_, res) => {
     ok: true,
     noTrading: true,
     walletAccess: false,
-    dataSource: "Bitquery V2 Pump.fun stream",
+    dataSource: "PumpDev WebSocket (free)",
     timestamp: new Date().toISOString()
   });
 });
@@ -67,13 +65,7 @@ app.get("/api/health", (_, res) => {
 const port = Number(process.env.PORT || 3000);
 
 app.listen(port, () => {
-  console.log(`PumpFinder V4: http://localhost:${port}`);
+  console.log(`PumpFinder V5: http://localhost:${port}`);
 
-  if (!process.env.BITQUERY_TOKEN) {
-    console.log(
-      "BITQUERY_TOKEN absent: dashboard actif, mais aucune donnée live."
-    );
-  } else {
-    stream.start();
-  }
+  stream.start();
 });

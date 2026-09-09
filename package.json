@@ -1,6 +1,6 @@
 {
-  "name": "pumpfinder-v3",
-  "version": "3.0.0",
+  "name": "pumpfinder-v5",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
   "scripts": {"start":"node server.js","dev":"node --watch server.js"},
