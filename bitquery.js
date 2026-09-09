@@ -68,8 +68,13 @@ export class PumpStream {
           this.totalTrades++;
           this.lastTrade = new Date().toISOString();
 
+          const usdText =
+            Number.isFinite(trade.usd) && trade.usd > 0
+              ? `$${trade.usd.toFixed(2)}`
+              : `${trade.quoteSOL.toFixed(4)} SOL`;
+
           console.log(
-            `💰 ${trade.side} $${trade.symbol} | $${trade.usd.toFixed(2)}`
+            `💰 ${trade.side} $${trade.symbol} | ${usdText}`
           );
 
           if (typeof this.onTrade === "function") {
